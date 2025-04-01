@@ -2,19 +2,73 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <!-- Crucial for responsiveness -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TSP - ACO Step-by-Step Vis</title>
     <style>
-        body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; overflow: hidden; background-color: #f0f0f0; }
-        #container { flex-grow: 1; height: 100%; position: relative; background-color: #1a1a1a; } /* Scene background */
-        #controls { width: 320px; padding: 15px; overflow-y: auto; border-right: 1px solid #ccc; box-sizing: border-box; height: 100%; display: flex; flex-direction: column; background-color: #ffffff; }
+        /* --- Base & Desktop Styles --- */
+        html {
+             box-sizing: border-box; /* Include padding and border in element's total width and height */
+        }
+        *, *:before, *:after {
+             box-sizing: inherit;
+        }
+        body {
+            margin: 0;
+            font-family: sans-serif;
+            display: flex; /* Side-by-side layout by default */
+            min-height: 100vh; /* Use min-height for flexibility */
+            overflow: hidden; /* Hide body scrollbars on desktop */
+            background-color: #f0f0f0;
+        }
+        #container {
+            flex-grow: 1; /* Takes remaining width */
+            height: 100vh; /* Takes full viewport height on desktop */
+            position: relative;
+            background-color: #1a1a1a; /* Scene background */
+        }
+        #controls {
+            width: 320px; /* Fixed width on desktop */
+            flex-shrink: 0; /* Prevent controls from shrinking */
+            padding: 15px;
+            overflow-y: auto; /* Allow scrolling within controls */
+            border-right: 1px solid #ccc; /* Separator on desktop */
+            border-bottom: none; /* No bottom border on desktop */
+            height: 100vh; /* Full viewport height */
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+        }
+        #controls .scrollable-content { /* Added wrapper for content */
+             flex-grow: 1; /* Allow content to take space */
+             /* overflow-y: auto; is handled by #controls */
+        }
+
         #controls h2 { margin-top: 0; color: #333; }
         #controls h3 { margin-top: 15px; margin-bottom: 8px; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 4px; color: #444;}
         .control-group { margin-bottom: 12px; }
         label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555;}
-        input[type="number"], input[type="range"] { width: calc(100% - 16px); margin-bottom: 5px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box;}
-        input[type="range"] { padding: 0;}
-        button { padding: 10px 15px; font-size: 1em; cursor: pointer; width: 100%; background-color: #5cb85c; color: white; border: none; border-radius: 4px; margin-top: 5px; transition: background-color 0.2s ease; }
+        /* Make inputs fill container */
+        input[type="number"], input[type="range"], button {
+             width: 100%;
+             margin-bottom: 5px;
+        }
+        input[type="number"] {
+            padding: 6px; /* Slightly more padding */
+            border: 1px solid #ccc;
+            border-radius: 3px;
+        }
+        input[type="range"] {
+            padding: 0;
+            cursor: pointer;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #5cb85c; color: white; border: none; border-radius: 4px;
+            margin-top: 5px; transition: background-color 0.2s ease;
+        }
         button#runPauseButton.running { background-color: #f0ad4e; } /* Orange for Pause/Resume */
         button#runPauseButton.paused { background-color: #5bc0de; } /* Blue for Resume */
         button#stopButton { background-color: #d9534f; } /* Red for Stop */
@@ -22,23 +76,72 @@
         button:disabled { background-color: #cccccc; cursor: not-allowed; opacity: 0.6;}
         #output { margin-top: 12px; font-weight: bold; font-size: 0.95em; color: #333;}
         #status { margin-top: 8px; color: #0275d8; min-height: 2.5em; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 8px;}
-        canvas { display: block; }
+        canvas { display: block; /* Prevent extra space below canvas */ }
         .value-display { display: inline-block; margin-left: 8px; font-style: italic; color: #666; font-size: 0.9em;}
         .button-group { display: flex; gap: 10px; margin-top: 15px;}
         .button-group button { flex: 1; }
          #loading-overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.6); color: #fff; display: none;
+            background: rgba(0, 0, 0, 0.7); /* Slightly darker overlay */
+            color: #fff; display: none;
             justify-content: center; align-items: center; font-size: 1.6em; z-index: 10; text-align: center;
+            padding: 20px; /* Add padding */
         }
         .checkbox-group label { display: inline-block; margin-left: 5px; font-weight: normal; font-size: 0.95em; color: #333;}
         .checkbox-group input[type="checkbox"] { margin-right: 5px; vertical-align: middle;}
         .checkbox-group { padding: 5px 0; }
+
+        /* --- Responsive Styles --- */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column; /* Stack controls on top of container */
+                overflow: auto; /* Allow body scroll if content exceeds viewport */
+                height: auto; /* Remove fixed height */
+            }
+            #controls {
+                width: 100%; /* Full width */
+                height: 45vh; /* Controls take top 45% of viewport height */
+                min-height: 280px; /* Minimum height for controls */
+                border-right: none; /* Remove side border */
+                border-bottom: 1px solid #ccc; /* Add bottom border */
+                /* overflow-y: auto; is already set */
+            }
+            #container {
+                width: 100%; /* Full width */
+                height: 55vh; /* Container takes bottom 55% of viewport height */
+                min-height: 250px; /* Minimum height for visualization */
+            }
+            #controls button {
+                 padding: 12px 15px; /* Slightly larger touch targets */
+            }
+            /* Optional: Stack button group vertically on small screens */
+            /*
+            .button-group {
+                flex-direction: column;
+            }
+            */
+        }
+         @media (max-width: 400px) {
+            #controls {
+                 font-size: 0.9em; /* Slightly smaller base font in controls */
+            }
+            #controls h2 {
+                 font-size: 1.3em;
+            }
+             #controls h3 {
+                 font-size: 1.05em;
+            }
+            label {
+                font-size: 0.85em;
+            }
+         }
+
     </style>
 </head>
 <body>
+    <!-- Moved content inside a scrollable div within controls for clarity -->
     <div id="controls">
-        <div> <!-- Scrollable content area -->
+        <div class="scrollable-content">
             <h2>ACO Parameters</h2>
 
             <div class="control-group">
@@ -96,7 +199,7 @@
 
             <div id="status">Status: Idle</div>
             <div id="output">Best Path Length: N/A</div>
-        </div> <!-- End scrollable area -->
+        </div> <!-- End scrollable content -->
     </div>
     <div id="container">
          <div id="loading-overlay">Initializing...</div>
@@ -455,7 +558,8 @@
              if (n_points === 0) return 1.0;
              for (let i = 0; i < n_points; i++) {
                  for (let j = i + 1; j < n_points; j++) {
-                     if (pheromoneMatrix[i][j] > maxP) {
+                     // Add safety check for indices
+                     if (i < pheromoneMatrix.length && j < pheromoneMatrix[i].length && pheromoneMatrix[i][j] > maxP) {
                          maxP = pheromoneMatrix[i][j];
                      }
                  }
@@ -559,7 +663,7 @@
 
             // Scene
             scene = new THREE.Scene();
-            // scene.background = new THREE.Color(0x1a1a1a); // Set by container CSS now
+            // scene.background is set by container CSS now
 
             // Camera
             camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1500);
@@ -602,18 +706,31 @@
 
         function onWindowResize() {
             const container = containerDiv;
-            if (!container) return;
-            camera.aspect = container.clientWidth / container.clientHeight;
+            if (!container || !renderer || !camera) return; // Check if Three.js objects exist
+
+            // IMPORTANT: Get the ACTUAL dimensions of the container DIV
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+             // Check for zero dimensions to prevent errors
+            if (width === 0 || height === 0) {
+                 console.warn("Container dimensions are zero during resize.");
+                 return;
+            }
+
+
+            camera.aspect = width / height;
             camera.updateProjectionMatrix();
-            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setSize(width, height);
         }
 
         function animate() {
             // This loop only handles rendering and controls, continuously
-            requestAnimationFrame(animate);
-            controls.update(); // Update controls if damping is enabled
-            renderer.render(scene, camera);
+            animationFrameIdRender = requestAnimationFrame(animate); // Use a different ID if needed, but likely okay
+             if (controls) controls.update(); // Update controls if damping is enabled
+             if (renderer && scene && camera) renderer.render(scene, camera); // Check objects exist before rendering
          }
+         let animationFrameIdRender = null; // Separate ID for render loop (best practice)
 
         function generatePoints(numPoints) {
             stopSimulation(); // Stop any active simulation before changing points
@@ -645,7 +762,9 @@
                 const obj = pointObjectsGroup.children[0];
                 pointObjectsGroup.remove(obj);
                 if (obj.geometry) obj.geometry.dispose();
-                if (obj.material) obj.material.dispose();
+                if (obj.material) {
+                    // Material is shared, dispose only once if needed, but usually not necessary unless replacing
+                }
              }
 
              if (points.length === 0) return;
@@ -669,6 +788,7 @@
          function drawPathLine(pathIndices, color, linewidth, opacity = 1.0) {
             if (!pathIndices || pathIndices.length < 2) return null; // Need at least two points for a line
 
+            // Create a unique material for each path line to manage opacity/color independently
             const pathMaterial = new THREE.LineBasicMaterial({
                 color: color,
                 linewidth: linewidth, // Note: linewidth > 1 might not render consistently across systems
@@ -705,16 +825,14 @@
 
          // Function to clear a specific THREE.Line object
          function clearVisualization(lineObject) {
-             if (lineObject) {
+             if (lineObject && scene) { // Check if scene exists
+                 scene.remove(lineObject); // Remove from the main scene
+                 pheromoneLinesGroup.remove(lineObject); // Attempt removal from group just in case
                  if (lineObject.geometry) lineObject.geometry.dispose();
-                 // Dispose material ONLY if it's unique to this object (true for paths, check pheromones)
-                 if (lineObject.material) {
-                     // Check if material is shared before disposing? For paths, it's unique per draw.
+                 // Dispose material ONLY if it's unique to this object (true for paths)
+                 if (lineObject.material && !lineObject.material.isShared) { // Assume non-shared for paths
                      lineObject.material.dispose();
                  }
-                 scene.remove(lineObject); // Remove from the main scene
-                 // If it was in a group, it should also be removed from the group
-                 pheromoneLinesGroup.remove(lineObject); // Attempt removal from group just in case
              }
          }
 
@@ -725,10 +843,10 @@
              for (let i = pheromoneLineObjects.length - 1; i >= 0; i--) {
                  const obj = pheromoneLineObjects[i];
                  if (obj.line) {
+                     pheromoneLinesGroup.remove(obj.line); // Remove from the dedicated group
                      if (obj.line.geometry) obj.line.geometry.dispose();
                      // Pheromone lines use cloned materials, so dispose them
                      if (obj.line.material) obj.line.material.dispose();
-                     pheromoneLinesGroup.remove(obj.line); // Remove from the dedicated group
                  }
              }
              pheromoneLineObjects = []; // Clear the tracking array
@@ -747,7 +865,8 @@
                  linewidth: 1,
                  transparent: true,
                  opacity: PHEROMONE_MIN_OPACITY, // Start almost invisible
-                 depthTest: false // Render pheromones potentially behind spheres slightly better
+                 depthTest: false, // Render pheromones potentially behind spheres slightly better
+                 // side: THREE.DoubleSide // May not be needed for lines
              });
 
              for (let i = 0; i < n_points; i++) {
@@ -778,7 +897,7 @@
          function updatePheromoneLineOpacities(maxPheromone) {
              // If the feature is toggled off, the entire group is already hidden, so maybe skip calculations?
              // However, updating ensures state is correct if toggled back on. Let's update anyway.
-             // pheromoneLinesGroup.visible = showPheromones; // Ensure group visibility matches toggle
+              if (!pheromoneLinesGroup.visible) return; // Early exit if group is hidden
 
              const safeMaxPheromone = maxPheromone > 1e-9 ? maxPheromone : 1.0;
 
@@ -787,10 +906,11 @@
                  const j = obj.indices[1];
 
                  // Ensure indices are valid before accessing matrix
-                 if (i >= pheromoneMatrix.length || j >= pheromoneMatrix[i].length) {
-                      console.warn(`Invalid indices [${i}, ${j}] for pheromone matrix access.`);
-                      return; // Skip this line if indices are bad
-                 }
+                  if (i >= pheromoneMatrix.length || !pheromoneMatrix[i] || j >= pheromoneMatrix[i].length) {
+                      // console.warn(`Invalid indices [${i}, ${j}] for pheromone matrix access.`);
+                       if(obj.line) obj.line.visible = false; // Hide line if data is invalid
+                       return; // Skip this line if indices are bad
+                  }
 
                  const currentPheromone = pheromoneMatrix[i][j];
 
@@ -801,9 +921,11 @@
                  const opacity = PHEROMONE_MIN_OPACITY + (PHEROMONE_MAX_OPACITY - PHEROMONE_MIN_OPACITY) * normalizedPheromone;
 
                  // Update the individual line's material opacity
-                 obj.line.material.opacity = opacity;
-                  // Make line visible only if its calculated opacity is noticeably above the minimum
-                 obj.line.visible = opacity > (PHEROMONE_MIN_OPACITY + 0.005);
+                 if(obj.line && obj.line.material) {
+                     obj.line.material.opacity = opacity;
+                     // Make line visible only if its calculated opacity is noticeably above the minimum
+                     obj.line.visible = opacity > (PHEROMONE_MIN_OPACITY + 0.005);
+                 }
              });
          }
 
@@ -827,7 +949,7 @@
                  // Use timeout to allow UI update (show loader) before potential blocking generation
                  setTimeout(() => { generatePoints(numPoints); hideLoading(); }, 50);
              } else {
-                 nPointsInput.value = points.length; // Reset to current valid value if input is bad
+                 nPointsInput.value = points.length > 0 ? points.length : 15; // Reset to current or default
                  console.warn("Invalid number of points entered.");
              }
         });
@@ -845,7 +967,7 @@
             showPheromones = e.target.checked;
             pheromoneLinesGroup.visible = showPheromones; // Immediately toggle group visibility
             // If turning on during run, might need an immediate opacity update?
-            if (showPheromones && isRunning && !isPaused) {
+            if (showPheromones && (isRunning || isPaused)) { // Update if running or paused
                  updatePheromoneLineOpacities(getMaximumPheromone());
             }
         });
@@ -855,6 +977,7 @@
              if (!showAntPath) { // If turning off, clear the current temp line
                   clearVisualization(tempAntPathLine); tempAntPathLine = null;
              }
+             // No need to redraw immediately when turning on, it happens in updateVisualizations
          });
 
          showBestPathCheckbox.addEventListener('change', (e) => {
@@ -874,19 +997,38 @@
          }
 
         // --- Initialization ---
-        initThreeJS(); // Setup scene, camera, renderer, controls
+         function initializeApp() {
+            try {
+                initThreeJS(); // Setup scene, camera, renderer, controls
 
-        // Set initial display values for sliders
-        ['alpha', 'beta', 'evaporationRate', 'q'].forEach(id => updateSliderValue(id, `${id}Value`));
+                // Set initial display values for sliders
+                ['alpha', 'beta', 'evaporationRate', 'q'].forEach(id => updateSliderValue(id, `${id}Value`));
 
-        stopButton.disabled = true; // Can't stop if not running
+                stopButton.disabled = true; // Can't stop if not running
 
-        // Generate initial points on load
-        showLoading("Generating initial points...");
-        setTimeout(() => {
-             generatePoints(parseInt(nPointsInput.value, 10)); // Generate points based on default UI value
-             hideLoading();
-        }, 100); // Small delay to ensure page is ready
+                // Generate initial points on load
+                showLoading("Generating initial points...");
+                setTimeout(() => {
+                    generatePoints(parseInt(nPointsInput.value, 10)); // Generate points based on default UI value
+                    hideLoading();
+                    onWindowResize(); // Explicitly call resize once after setup
+                }, 100); // Small delay to ensure page is ready
+             } catch (error) {
+                 console.error("Initialization failed:", error);
+                 hideLoading();
+                 statusDiv.textContent = "Error initializing application. Check console.";
+                 // Optionally display a user-friendly error message
+                 containerDiv.innerHTML = "<p style='color: red; padding: 20px;'>An error occurred during initialization. Please check the developer console.</p>";
+             }
+         }
+
+         // Ensure DOM is ready before initializing
+         if (document.readyState === 'loading') {
+             document.addEventListener('DOMContentLoaded', initializeApp);
+         } else {
+             initializeApp(); // DOMContentLoaded has already fired
+         }
+
 
     </script>
 </body>
