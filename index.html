@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TSP - ACO Step-by-Step Vis</title>
+    <style>
+        body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; overflow: hidden; background-color: #f0f0f0; }
+        #container { flex-grow: 1; height: 100%; position: relative; background-color: #1a1a1a; } /* Scene background */
+        #controls { width: 320px; padding: 15px; overflow-y: auto; border-right: 1px solid #ccc; box-sizing: border-box; height: 100%; display: flex; flex-direction: column; background-color: #ffffff; }
+        #controls h2 { margin-top: 0; color: #333; }
+        #controls h3 { margin-top: 15px; margin-bottom: 8px; font-size: 1.1em; border-bottom: 1px solid #eee; padding-bottom: 4px; color: #444;}
+        .control-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; color: #555;}
+        input[type="number"], input[type="range"] { width: calc(100% - 16px); margin-bottom: 5px; padding: 4px; border: 1px solid #ccc; border-radius: 3px; box-sizing: border-box;}
+        input[type="range"] { padding: 0;}
+        button { padding: 10px 15px; font-size: 1em; cursor: pointer; width: 100%; background-color: #5cb85c; color: white; border: none; border-radius: 4px; margin-top: 5px; transition: background-color 0.2s ease; }
+        button#runPauseButton.running { background-color: #f0ad4e; } /* Orange for Pause/Resume */
+        button#runPauseButton.paused { background-color: #5bc0de; } /* Blue for Resume */
+        button#stopButton { background-color: #d9534f; } /* Red for Stop */
+        button:hover:not(:disabled) { opacity: 0.9; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; opacity: 0.6;}
+        #output { margin-top: 12px; font-weight: bold; font-size: 0.95em; color: #333;}
+        #status { margin-top: 8px; color: #0275d8; min-height: 2.5em; font-size: 0.9em; border-top: 1px solid #eee; padding-top: 8px;}
+        canvas { display: block; }
+        .value-display { display: inline-block; margin-left: 8px; font-style: italic; color: #666; font-size: 0.9em;}
+        .button-group { display: flex; gap: 10px; margin-top: 15px;}
+        .button-group button { flex: 1; }
+         #loading-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); color: #fff; display: none;
+            justify-content: center; align-items: center; font-size: 1.6em; z-index: 10; text-align: center;
+        }
+        .checkbox-group label { display: inline-block; margin-left: 5px; font-weight: normal; font-size: 0.95em; color: #333;}
+        .checkbox-group input[type="checkbox"] { margin-right: 5px; vertical-align: middle;}
+        .checkbox-group { padding: 5px 0; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div> <!-- Scrollable content area -->
+            <h2>ACO Parameters</h2>
+
+            <div class="control-group">
+                <label for="nPoints">Number of Cities (Points):</label>
+                <input type="number" id="nPoints" value="15" min="3" max="50"> <!-- Max 50 reasonable for perf -->
+            </div>
+            <div class="control-group">
+                <label for="nAnts">Number of Ants:</label>
+                <input type="number" id="nAnts" value="10" min="1" max="100">
+            </div>
+            <div class="control-group">
+                <label for="nIterations">Max Iterations:</label>
+                <input type="number" id="nIterations" value="150" min="1" max="2000">
+            </div>
+             <div class="control-group">
+                <label for="updateFrequency">Update Vis Every X Iterations:</label>
+                <input type="number" id="updateFrequency" value="1" min="1" max="100">
+            </div>
+
+            <div class="control-group">
+                <label for="alpha">Alpha (Pheromone): <span class="value-display" id="alphaValue">1.0</span></label>
+                <input type="range" id="alpha" min="0" max="5" step="0.1" value="1.0">
+            </div>
+            <div class="control-group">
+                <label for="beta">Beta (Distance): <span class="value-display" id="betaValue">2.5</span></label>
+                <input type="range" id="beta" min="0" max="10" step="0.1" value="2.5">
+            </div>
+            <div class="control-group">
+                <label for="evaporationRate">Evaporation Rate: <span class="value-display" id="evaporationRateValue">0.5</span></label>
+                <input type="range" id="evaporationRate" min="0.01" max="1" step="0.01" value="0.5">
+            </div>
+             <div class="control-group">
+                <label for="q">Q (Pheromone Deposit): <span class="value-display" id="qValue">1.0</span></label>
+                <input type="range" id="q" min="0.1" max="10" step="0.1" value="1.0">
+            </div>
+
+             <h3>Visualization Options</h3>
+             <div class="control-group checkbox-group">
+                 <input type="checkbox" id="showPheromones" checked>
+                 <label for="showPheromones">Show Pheromone Trails</label>
+             </div>
+              <div class="control-group checkbox-group">
+                 <input type="checkbox" id="showAntPath" checked>
+                 <label for="showAntPath">Show One Ant's Path</label>
+             </div>
+              <div class="control-group checkbox-group">
+                 <input type="checkbox" id="showBestPath" checked>
+                 <label for="showBestPath">Show Best Path So Far</label>
+             </div>
+
+            <div class="button-group">
+                <button id="runPauseButton">Run</button>
+                <button id="stopButton">Stop</button>
+            </div>
+
+            <div id="status">Status: Idle</div>
+            <div id="output">Best Path Length: N/A</div>
+        </div> <!-- End scrollable area -->
+    </div>
+    <div id="container">
+         <div id="loading-overlay">Initializing...</div>
+    </div>
+
+    <!-- Three.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for camera interaction -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script type="module">
+        // --- Global Variables ---
+        let scene, camera, renderer, controls;
+        let points = []; // Array of {x, y, z, id} objects
+        const SCENE_BOUNDS = 50;
+
+        // --- Visualization Objects ---
+        let pointObjectsGroup = new THREE.Group(); // City sphere meshes
+        let bestPathLine = null;           // Line for the best TSP path found
+        let pheromoneLinesGroup = new THREE.Group(); // Holds all pheromone trail lines
+        let pheromoneLineObjects = [];    // Stores { line: THREE.Line, indices: [i, j] }
+        let tempAntPathLine = null;       // Line for visualizing one ant's path temporarily
+
+        // --- Simulation State ---
+        let isRunning = false;
+        let isPaused = false;
+        let currentIteration = 0;
+        let maxIterations = 150;
+        let updateFrequency = 1;
+        let pheromoneMatrix = []; // n x n matrix
+        let distMatrix = [];      // n x n matrix
+        let bestPathSoFar = null; // Array of point indices
+        let bestPathLengthSoFar = Infinity;
+        let animationFrameId = null;
+        let nAnts, alpha, beta, evaporationRate, Q; // ACO parameters from UI
+        let lastIterationPaths = []; // Store paths from the last iteration for visualization
+
+         // --- Visualization Settings ---
+         let showPheromones = true;
+         let showAntPath = true;
+         let showBestPath = true;
+         const PHEROMONE_MIN_OPACITY = 0.01; // Barely visible
+         const PHEROMONE_MAX_OPACITY = 0.6;  // Max visibility (avoid full opaque clutter)
+         const ANT_PATH_COLOR = 0xffa500; // Orange
+         const BEST_PATH_COLOR = 0x00dd00; // Brighter Green
+         const PHEROMONE_COLOR = 0xaaaaff; // Light Blue/Purple
+
+
+        // --- UI References ---
+        const nPointsInput = document.getElementById('nPoints');
+        const nAntsInput = document.getElementById('nAnts');
+        const nIterationsInput = document.getElementById('nIterations');
+        const alphaInput = document.getElementById('alpha');
+        const betaInput = document.getElementById('beta');
+        const evaporationRateInput = document.getElementById('evaporationRate');
+        const qInput = document.getElementById('q');
+        const updateFrequencyInput = document.getElementById('updateFrequency');
+        const showPheromonesCheckbox = document.getElementById('showPheromones');
+        const showAntPathCheckbox = document.getElementById('showAntPath');
+        const showBestPathCheckbox = document.getElementById('showBestPath');
+        const runPauseButton = document.getElementById('runPauseButton');
+        const stopButton = document.getElementById('stopButton');
+        const outputDiv = document.getElementById('output');
+        const statusDiv = document.getElementById('status');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const containerDiv = document.getElementById('container'); // Needed for resize
+
+        const alphaValueSpan = document.getElementById('alphaValue');
+        const betaValueSpan = document.getElementById('betaValue');
+        const evaporationRateValueSpan = document.getElementById('evaporationRateValue');
+        const qValueSpan = document.getElementById('qValue');
+
+        // --- ACO Algorithm Helpers ---
+        function distance(p1, p2) {
+            if (!p1 || !p2) return Infinity; // Safety check
+            const dx = p1.x - p2.x;
+            const dy = p1.y - p2.y;
+            const dz = p1.z - p2.z;
+            return Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+
+        function weightedRandomChoice(items, probabilities) {
+            const cleanProbabilities = probabilities.map(p => Math.max(0, p)); // Ensure non-negative
+            const sum = cleanProbabilities.reduce((acc, val) => acc + val, 0);
+
+            if (sum <= 1e-9 || items.length === 0) {
+                 // Fallback: Choose purely random unvisited node if probabilities fail
+                 return items.length > 0 ? items[Math.floor(Math.random() * items.length)] : null;
+            }
+
+            let rand = Math.random() * sum;
+            let cumulative = 0;
+            for (let i = 0; i < cleanProbabilities.length; i++) {
+                cumulative += cleanProbabilities[i];
+                if (rand <= cumulative) {
+                    return items[i]; // Return the item (index)
+                }
+            }
+            // Fallback for floating point issues
+            return items[items.length - 1];
+        }
+
+        // --- Simulation Control ---
+
+        function initACOState() {
+            const n_points = points.length;
+            if (n_points < 2) return false; // Need at least 2 points
+
+            currentIteration = 0;
+            bestPathSoFar = null;
+            bestPathLengthSoFar = Infinity;
+            lastIterationPaths = [];
+
+            // Initialize pheromone matrix (n x n) filled with 1.0
+            pheromoneMatrix = Array(n_points).fill(0).map(() => Array(n_points).fill(1.0));
+
+            // Precompute distance matrix (n x n)
+            distMatrix = Array(n_points).fill(0).map(() => Array(n_points).fill(0));
+            for (let i = 0; i < n_points; ++i) {
+                for (let j = i + 1; j < n_points; ++j) {
+                    const d = distance(points[i], points[j]);
+                    distMatrix[i][j] = d;
+                    distMatrix[j][i] = d; // Symmetric
+                }
+            }
+
+            // Get parameters from UI just before run
+            nAnts = parseInt(nAntsInput.value, 10);
+            maxIterations = parseInt(nIterationsInput.value, 10);
+            alpha = parseFloat(alphaInput.value);
+            beta = parseFloat(betaInput.value);
+            evaporationRate = parseFloat(evaporationRateInput.value);
+            Q = parseFloat(qInput.value);
+            updateFrequency = parseInt(updateFrequencyInput.value, 10);
+
+             // Update visualization toggles state
+            showPheromones = showPheromonesCheckbox.checked;
+            showAntPath = showAntPathCheckbox.checked;
+            showBestPath = showBestPathCheckbox.checked;
+
+            outputDiv.textContent = `Best Path Length: N/A`;
+            statusDiv.textContent = `Status: Initialized. ${n_points} points. Ready.`;
+
+             // Crucial: Create visualization objects for the *new* points/state
+            createOrUpdatePheromoneLines();
+            return true;
+        }
+
+        function runSimulationStep() {
+             // Stop conditions
+            if (!isRunning || isPaused || currentIteration >= maxIterations) {
+                finalizeSimulation();
+                return;
+            }
+
+            const n_points = points.length;
+            if (n_points < 2) { finalizeSimulation(); return; } // Safety check
+
+            const iterationPaths = []; // Paths found in THIS iteration
+            const iterationPathLengths = [];
+
+            // --- 1. Ant Path Construction ---
+            for (let ant = 0; ant < nAnts; ant++) {
+                 let visited = Array(n_points).fill(false);
+                 // Start each ant at a random point
+                 let current_point_idx = Math.floor(Math.random() * n_points);
+                 visited[current_point_idx] = true;
+                 let path = [current_point_idx]; // Stores indices
+                 let path_length = 0;
+
+                 while (path.length < n_points) {
+                     const unvisited_indices = [];
+                     for(let i=0; i<n_points; ++i) { if (!visited[i]) unvisited_indices.push(i); }
+
+                     if (unvisited_indices.length === 0) break; // Should have visited all
+
+                     const probabilities = [];
+                     let total_prob_measure = 0;
+
+                     for (const unvisited_idx of unvisited_indices) {
+                         const ph = pheromoneMatrix[current_point_idx][unvisited_idx];
+                         const dist = distMatrix[current_point_idx][unvisited_idx];
+                         // Heuristic: Inverse distance (handle zero distance)
+                         const heuristic = dist > 1e-9 ? (1.0 / dist) : 1e9; // High value if points overlap
+
+                         // Calculate probability measure: (pheromone^alpha) * (heuristic^beta)
+                         const prob_measure = Math.pow(ph, alpha) * Math.pow(heuristic, beta);
+
+                         // Basic check for validity
+                         if (isNaN(prob_measure) || !isFinite(prob_measure) || prob_measure < 0) {
+                             probabilities.push(1e-9); // Assign tiny positive probability if calculation fails
+                             total_prob_measure += 1e-9;
+                         } else {
+                             probabilities.push(prob_measure);
+                             total_prob_measure += prob_measure;
+                         }
+                     }
+
+                     // Choose next point based on calculated probabilities
+                     const next_point_idx = weightedRandomChoice(unvisited_indices, probabilities);
+
+                     if (next_point_idx === null) {
+                        // console.error(`Weighted choice failed for ant ${ant} at node ${current_point_idx}`);
+                         break; // Stop this ant if choice fails
+                     }
+
+                     // Move ant
+                     path.push(next_point_idx);
+                     path_length += distMatrix[current_point_idx][next_point_idx];
+                     visited[next_point_idx] = true;
+                     current_point_idx = next_point_idx;
+                 } // End while building path for one ant
+
+                 // If ant completed a full tour
+                 if (path.length === n_points) {
+                     // Add distance from last point back to start point
+                     path_length += distMatrix[path[n_points - 1]][path[0]];
+                     iterationPaths.push(path);
+                     iterationPathLengths.push(path_length);
+
+                     // Check if this ant found a new global best path
+                     if (path_length < bestPathLengthSoFar) {
+                         bestPathLengthSoFar = path_length;
+                         bestPathSoFar = path.slice(); // Store a *copy* of the path indices
+                         // Update best length display immediately
+                         outputDiv.textContent = `Best Path Length: ${bestPathLengthSoFar.toFixed(2)}`;
+                     }
+                 } else {
+                     // console.warn(`Ant ${ant} failed to complete tour (length ${path.length}/${n_points})`);
+                 }
+            } // End loop for each ant
+
+            // Store paths for potential visualization later in this step
+            lastIterationPaths = iterationPaths;
+
+            // --- 2. Pheromone Evaporation ---
+            let currentMaxPheromone = 0; // Track max for normalization in visualization
+            for (let i = 0; i < n_points; i++) {
+                for (let j = i + 1; j < n_points; j++) { // Iterate upper triangle is enough for symmetric update
+                    pheromoneMatrix[i][j] *= evaporationRate;
+                    // Optional: Add a minimum pheromone level to prevent stagnation
+                    // pheromoneMatrix[i][j] = Math.max(pheromoneMatrix[i][j], 0.01);
+
+                    pheromoneMatrix[j][i] = pheromoneMatrix[i][j]; // Maintain symmetry
+                    if(pheromoneMatrix[i][j] > currentMaxPheromone) {
+                        currentMaxPheromone = pheromoneMatrix[i][j];
+                    }
+                }
+            }
+
+            // --- 3. Pheromone Deposit ---
+            for (let ant_idx = 0; ant_idx < iterationPaths.length; ant_idx++) {
+                const path = iterationPaths[ant_idx]; // Path is array of indices
+                const path_length = iterationPathLengths[ant_idx];
+
+                if (path_length <= 1e-9) continue; // Avoid division by zero if path length is tiny
+
+                const deposit_amount = Q / path_length;
+
+                for (let i = 0; i < n_points; i++) {
+                    const u_idx = path[i];
+                    const v_idx = path[(i + 1) % n_points]; // Wrap around for the last edge back to start
+
+                    pheromoneMatrix[u_idx][v_idx] += deposit_amount;
+                    pheromoneMatrix[v_idx][u_idx] = pheromoneMatrix[u_idx][v_idx]; // Maintain symmetry
+
+                    // Update max pheromone if needed after deposit
+                    if(pheromoneMatrix[u_idx][v_idx] > currentMaxPheromone) {
+                         currentMaxPheromone = pheromoneMatrix[u_idx][v_idx];
+                    }
+                }
+            }
+
+            // --- 4. Update Visualization & UI (Periodically) ---
+            if (currentIteration % updateFrequency === 0 || currentIteration === maxIterations - 1) {
+                statusDiv.textContent = `Status: Running... Iteration ${currentIteration + 1}/${maxIterations}`;
+                // Best path length is updated immediately when found, but we can assert it here too
+                outputDiv.textContent = `Best Path Length: ${bestPathLengthSoFar < Infinity ? bestPathLengthSoFar.toFixed(2) : 'N/A'}`;
+
+                // Update the visual elements based on current state and max pheromone
+                updateVisualizations(currentMaxPheromone);
+            }
+
+            // --- 5. Schedule Next Step ---
+            currentIteration++;
+            animationFrameId = requestAnimationFrame(runSimulationStep);
+        }
+
+        function updateVisualizations(maxPheromone) {
+            // Update Best Path Line
+            clearVisualization(bestPathLine); // Clear previous best path line
+            bestPathLine = null; // Reset variable
+            if (showBestPath && bestPathSoFar) {
+                bestPathLine = drawPathLine(bestPathSoFar, BEST_PATH_COLOR, 3, 1.0); // Draw solid best path
+            }
+
+            // Update Temporary Ant Path Visualization
+            clearVisualization(tempAntPathLine); // Clear previous ant path line
+            tempAntPathLine = null; // Reset variable
+            if (showAntPath && lastIterationPaths.length > 0) {
+                // Select a random ant path from the last iteration to display
+                const randomAntIndex = Math.floor(Math.random() * lastIterationPaths.length);
+                const antPathToDraw = lastIterationPaths[randomAntIndex];
+                if (antPathToDraw) {
+                     tempAntPathLine = drawPathLine(antPathToDraw, ANT_PATH_COLOR, 1.5, 0.8); // Thinner, slightly transparent
+                }
+            }
+
+            // Update Pheromone Trails Visualization
+            pheromoneLinesGroup.visible = showPheromones; // Toggle visibility based on checkbox
+            if (showPheromones) {
+                updatePheromoneLineOpacities(maxPheromone); // Update opacities based on current matrix
+            }
+        }
+
+        function finalizeSimulation() {
+             isRunning = false;
+             isPaused = false;
+             if (animationFrameId) { // Ensure any pending frame is cancelled
+                 cancelAnimationFrame(animationFrameId);
+                 animationFrameId = null;
+             }
+
+             runPauseButton.textContent = 'Run';
+             runPauseButton.classList.remove('running', 'paused');
+             runPauseButton.disabled = false;
+             stopButton.disabled = true;
+             setControlsEnabled(true); // Re-enable parameter inputs
+
+             // Clear temporary ant path visualization
+             clearVisualization(tempAntPathLine); tempAntPathLine = null;
+
+              // Final status update
+              if (currentIteration >= maxIterations) {
+                 statusDiv.textContent = `Status: Completed ${maxIterations} iterations. Final Length: ${bestPathLengthSoFar < Infinity ? bestPathLengthSoFar.toFixed(2) : 'N/A'}`;
+             } else {
+                 statusDiv.textContent = `Status: Stopped at iteration ${currentIteration}. Best Length: ${bestPathLengthSoFar < Infinity ? bestPathLengthSoFar.toFixed(2) : 'N/A'}`;
+             }
+              // Ensure final best path is drawn solidly if it exists
+              clearVisualization(bestPathLine); // Clear potentially dimmer line from last update
+              bestPathLine = null;
+              if (showBestPath && bestPathSoFar) {
+                  bestPathLine = drawPathLine(bestPathSoFar, BEST_PATH_COLOR, 3, 1.0);
+              }
+              // Update pheromones one last time to reflect final state
+               if (showPheromones) {
+                    updatePheromoneLineOpacities(getMaximumPheromone());
+               }
+
+              console.log("Simulation finalized. Best Length:", bestPathLengthSoFar);
+        }
+
+         function getMaximumPheromone() {
+             let maxP = 0;
+             const n_points = pheromoneMatrix.length;
+             if (n_points === 0) return 1.0;
+             for (let i = 0; i < n_points; i++) {
+                 for (let j = i + 1; j < n_points; j++) {
+                     if (pheromoneMatrix[i][j] > maxP) {
+                         maxP = pheromoneMatrix[i][j];
+                     }
+                 }
+             }
+             return maxP > 1e-9 ? maxP : 1.0; // Avoid returning 0 if all pheromones decayed/started low
+         }
+
+
+        function startSimulation() {
+            if (isRunning) return; // Prevent multiple starts
+
+            showLoading("Initializing simulation...");
+            // Use setTimeout to allow the loading overlay to render before potentially blocking initACOState
+            setTimeout(() => {
+                // Initialize ACO state (pheromone, distances etc.) based on current points and UI params
+                if (!initACOState()) { // This also creates pheromone lines now
+                    hideLoading();
+                    statusDiv.textContent = "Status: Error - Cannot initialize. Need points.";
+                    return;
+                }
+
+                // Clear any previous run's visualizations
+                clearVisualization(bestPathLine); bestPathLine = null;
+                clearVisualization(tempAntPathLine); tempAntPathLine = null;
+                // Pheromone lines are recreated in initACOState
+
+                isRunning = true;
+                isPaused = false;
+                runPauseButton.textContent = 'Pause';
+                runPauseButton.classList.add('running');
+                runPauseButton.classList.remove('paused');
+                runPauseButton.disabled = false;
+                stopButton.disabled = false;
+                setControlsEnabled(false); // Disable parameter inputs during run
+
+                hideLoading();
+                statusDiv.textContent = `Status: Starting... Iteration 0/${maxIterations}`;
+
+                // Kick off the first step
+                animationFrameId = requestAnimationFrame(runSimulationStep);
+            }, 50); // Small delay
+        }
+
+         function pauseSimulation() {
+            if (!isRunning || isPaused) return; // Can only pause if running and not already paused
+            isPaused = true;
+            if (animationFrameId) { // Cancel the next scheduled step
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            runPauseButton.textContent = 'Resume';
+            runPauseButton.classList.add('paused');
+            runPauseButton.classList.remove('running');
+            statusDiv.textContent = `Status: Paused at iteration ${currentIteration}.`;
+        }
+
+        function resumeSimulation() {
+            if (!isRunning || !isPaused) return; // Can only resume if running and paused
+            isPaused = false;
+            runPauseButton.textContent = 'Pause';
+            runPauseButton.classList.add('running');
+            runPauseButton.classList.remove('paused');
+            statusDiv.textContent = `Status: Resuming... Iteration ${currentIteration}/${maxIterations}`;
+            // Restart the animation loop
+            animationFrameId = requestAnimationFrame(runSimulationStep);
+        }
+
+        function stopSimulation() {
+            if (!isRunning && !isPaused) return; // Already stopped
+            // Set flags immediately to prevent race conditions
+            isRunning = false;
+            isPaused = false;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+                animationFrameId = null;
+            }
+            finalizeSimulation(); // Handles UI cleanup and final state display
+        }
+
+
+        function setControlsEnabled(enabled) {
+             nPointsInput.disabled = !enabled;
+             nAntsInput.disabled = !enabled;
+             nIterationsInput.disabled = !enabled;
+             alphaInput.disabled = !enabled;
+             betaInput.disabled = !enabled;
+             evaporationRateInput.disabled = !enabled;
+             qInput.disabled = !enabled;
+             updateFrequencyInput.disabled = !enabled;
+             // Keep visualization checkboxes always enabled
+             // showPheromonesCheckbox.disabled = !enabled;
+             // showAntPathCheckbox.disabled = !enabled;
+             // showBestPathCheckbox.disabled = !enabled;
+        }
+
+
+        // --- Three.js Setup and Visualization ---
+
+        function initThreeJS() {
+            const container = containerDiv; // Use reference
+
+            // Scene
+            scene = new THREE.Scene();
+            // scene.background = new THREE.Color(0x1a1a1a); // Set by container CSS now
+
+            // Camera
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1500);
+            camera.position.set(0, SCENE_BOUNDS * 0.8, SCENE_BOUNDS * 1.7); // Slightly higher view
+            camera.lookAt(0, 0, 0);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio); // Better resolution on high DPI displays
+            container.appendChild(renderer.domElement);
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xcccccc, 0.6); // Slightly brighter ambient
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            directionalLight.position.set(60, 80, 40); // Adjust angle
+            scene.add(directionalLight);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.3); // Softer fill light
+            directionalLight2.position.set(-60, -40, -30);
+            scene.add(directionalLight2);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.1;
+            controls.screenSpacePanning = false;
+            controls.maxPolarAngle = Math.PI; // Allow looking slightly below horizon
+
+            // Add groups to scene
+            scene.add(pointObjectsGroup);
+            scene.add(pheromoneLinesGroup); // Add the group for pheromone lines
+
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Start the rendering loop (distinct from simulation loop)
+            animate();
+        }
+
+        function onWindowResize() {
+            const container = containerDiv;
+            if (!container) return;
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        function animate() {
+            // This loop only handles rendering and controls, continuously
+            requestAnimationFrame(animate);
+            controls.update(); // Update controls if damping is enabled
+            renderer.render(scene, camera);
+         }
+
+        function generatePoints(numPoints) {
+            stopSimulation(); // Stop any active simulation before changing points
+
+            points = [];
+            for (let i = 0; i < numPoints; i++) {
+                points.push({
+                    x: (Math.random() - 0.5) * 2 * SCENE_BOUNDS,
+                    y: (Math.random() - 0.5) * 2 * SCENE_BOUNDS,
+                    z: (Math.random() - 0.5) * 2 * SCENE_BOUNDS,
+                    id: i // Assign an ID
+                });
+            }
+
+            visualizePoints(); // Create sphere meshes for the new points
+
+            // Clear any leftover visualizations from previous point sets
+            clearVisualization(bestPathLine); bestPathLine = null;
+            clearVisualization(tempAntPathLine); tempAntPathLine = null;
+            clearPheromoneVisualization(); // Clear old pheromone lines completely
+
+            // Reset ACO state, which will also call createOrUpdatePheromoneLines for the new points
+            initACOState();
+        }
+
+        function visualizePoints() {
+             // Clear existing point meshes first
+             while (pointObjectsGroup.children.length > 0) {
+                const obj = pointObjectsGroup.children[0];
+                pointObjectsGroup.remove(obj);
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) obj.material.dispose();
+             }
+
+             if (points.length === 0) return;
+
+             // Use a single geometry and material for efficiency
+             const pointGeometry = new THREE.SphereGeometry(1.0, 16, 16); // Adjust size/detail
+             const pointMaterial = new THREE.MeshPhongMaterial({
+                 color: 0xff3333, // Brighter red
+                 emissive: 0x110000, // Slight red glow
+                 shininess: 30
+             });
+
+             points.forEach(p => {
+                 const sphere = new THREE.Mesh(pointGeometry, pointMaterial); // Share geometry & material
+                 sphere.position.set(p.x, p.y, p.z);
+                 pointObjectsGroup.add(sphere);
+             });
+        }
+
+         // Generic function to draw a path line given indices
+         function drawPathLine(pathIndices, color, linewidth, opacity = 1.0) {
+            if (!pathIndices || pathIndices.length < 2) return null; // Need at least two points for a line
+
+            const pathMaterial = new THREE.LineBasicMaterial({
+                color: color,
+                linewidth: linewidth, // Note: linewidth > 1 might not render consistently across systems
+                transparent: opacity < 1.0,
+                opacity: opacity,
+                depthTest: true // Ensure lines render correctly with spheres
+            });
+
+            const pathPointsVec = [];
+            pathIndices.forEach(index => {
+                const p = points[index]; // Get point object by index
+                if (p) { // Check if point exists (safety)
+                    pathPointsVec.push(new THREE.Vector3(p.x, p.y, p.z));
+                } else {
+                    console.warn(`Invalid point index ${index} requested for path drawing.`);
+                }
+            });
+
+            // Add the starting point again to close the loop if it's a full tour
+            if (pathPointsVec.length > 1 && pathIndices.length === points.length) {
+                 const startPoint = points[pathIndices[0]];
+                 if(startPoint) {
+                     pathPointsVec.push(new THREE.Vector3(startPoint.x, startPoint.y, startPoint.z));
+                 }
+            } else if (pathPointsVec.length <= 1) {
+                 return null; // Cannot draw line with 0 or 1 point
+            }
+
+            const pathGeometry = new THREE.BufferGeometry().setFromPoints(pathPointsVec);
+            const line = new THREE.Line(pathGeometry, pathMaterial);
+            scene.add(line); // Add directly to scene for temp/best paths
+            return line; // Return the line object so it can be tracked/cleared
+         }
+
+         // Function to clear a specific THREE.Line object
+         function clearVisualization(lineObject) {
+             if (lineObject) {
+                 if (lineObject.geometry) lineObject.geometry.dispose();
+                 // Dispose material ONLY if it's unique to this object (true for paths, check pheromones)
+                 if (lineObject.material) {
+                     // Check if material is shared before disposing? For paths, it's unique per draw.
+                     lineObject.material.dispose();
+                 }
+                 scene.remove(lineObject); // Remove from the main scene
+                 // If it was in a group, it should also be removed from the group
+                 pheromoneLinesGroup.remove(lineObject); // Attempt removal from group just in case
+             }
+         }
+
+         // --- Pheromone Visualization Specific Functions ---
+
+         function clearPheromoneVisualization() {
+             // Iterate backwards while removing to avoid index issues
+             for (let i = pheromoneLineObjects.length - 1; i >= 0; i--) {
+                 const obj = pheromoneLineObjects[i];
+                 if (obj.line) {
+                     if (obj.line.geometry) obj.line.geometry.dispose();
+                     // Pheromone lines use cloned materials, so dispose them
+                     if (obj.line.material) obj.line.material.dispose();
+                     pheromoneLinesGroup.remove(obj.line); // Remove from the dedicated group
+                 }
+             }
+             pheromoneLineObjects = []; // Clear the tracking array
+             // The group itself (pheromoneLinesGroup) remains in the scene, empty
+         }
+
+         function createOrUpdatePheromoneLines() {
+             clearPheromoneVisualization(); // Ensure any old lines are gone
+
+             const n_points = points.length;
+             if (n_points < 2) return; // Cannot draw lines with less than 2 points
+
+             // Base material to be cloned for individual opacity control
+             const baseMaterial = new THREE.LineBasicMaterial({
+                 color: PHEROMONE_COLOR,
+                 linewidth: 1,
+                 transparent: true,
+                 opacity: PHEROMONE_MIN_OPACITY, // Start almost invisible
+                 depthTest: false // Render pheromones potentially behind spheres slightly better
+             });
+
+             for (let i = 0; i < n_points; i++) {
+                 for (let j = i + 1; j < n_points; j++) { // Iterate upper triangle only
+                     const p1 = points[i];
+                     const p2 = points[j];
+                     if (!p1 || !p2) continue; // Skip if points are missing
+
+                     const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+                         new THREE.Vector3(p1.x, p1.y, p1.z),
+                         new THREE.Vector3(p2.x, p2.y, p2.z)
+                     ]);
+
+                     // *** Crucial: Clone the material for each line ***
+                     const lineMaterial = baseMaterial.clone();
+
+                     const line = new THREE.Line(lineGeometry, lineMaterial);
+                     line.visible = false; // Start hidden, make visible only when opacity is above minimum
+
+                     pheromoneLinesGroup.add(line); // Add the line to the dedicated group
+                     pheromoneLineObjects.push({ line: line, indices: [i, j] }); // Track the line and its point indices
+                 }
+             }
+             // Set initial visibility of the *entire group* based on the checkbox
+             pheromoneLinesGroup.visible = showPheromonesCheckbox.checked;
+         }
+
+         function updatePheromoneLineOpacities(maxPheromone) {
+             // If the feature is toggled off, the entire group is already hidden, so maybe skip calculations?
+             // However, updating ensures state is correct if toggled back on. Let's update anyway.
+             // pheromoneLinesGroup.visible = showPheromones; // Ensure group visibility matches toggle
+
+             const safeMaxPheromone = maxPheromone > 1e-9 ? maxPheromone : 1.0;
+
+             pheromoneLineObjects.forEach(obj => {
+                 const i = obj.indices[0];
+                 const j = obj.indices[1];
+
+                 // Ensure indices are valid before accessing matrix
+                 if (i >= pheromoneMatrix.length || j >= pheromoneMatrix[i].length) {
+                      console.warn(`Invalid indices [${i}, ${j}] for pheromone matrix access.`);
+                      return; // Skip this line if indices are bad
+                 }
+
+                 const currentPheromone = pheromoneMatrix[i][j];
+
+                 // Normalize pheromone (linear scaling from 0 to 1)
+                 const normalizedPheromone = Math.min(1.0, Math.max(0, currentPheromone / safeMaxPheromone));
+
+                 // Map normalized value (0-1) to the desired opacity range
+                 const opacity = PHEROMONE_MIN_OPACITY + (PHEROMONE_MAX_OPACITY - PHEROMONE_MIN_OPACITY) * normalizedPheromone;
+
+                 // Update the individual line's material opacity
+                 obj.line.material.opacity = opacity;
+                  // Make line visible only if its calculated opacity is noticeably above the minimum
+                 obj.line.visible = opacity > (PHEROMONE_MIN_OPACITY + 0.005);
+             });
+         }
+
+         // --- UI Event Handlers ---
+         function updateSliderValue(sliderId, spanId) {
+             const slider = document.getElementById(sliderId);
+             const span = document.getElementById(spanId);
+             if(slider && span) span.textContent = parseFloat(slider.value).toFixed(2);
+         }
+        // Attach slider updates
+        ['alpha', 'beta', 'evaporationRate', 'q'].forEach(id => {
+             const slider = document.getElementById(id);
+             if(slider) slider.addEventListener('input', () => updateSliderValue(id, `${id}Value`));
+        });
+
+
+        nPointsInput.addEventListener('change', () => {
+             const numPoints = parseInt(nPointsInput.value, 10);
+             if (!isNaN(numPoints) && numPoints >= 3) {
+                showLoading(`Generating ${numPoints} points...`);
+                 // Use timeout to allow UI update (show loader) before potential blocking generation
+                 setTimeout(() => { generatePoints(numPoints); hideLoading(); }, 50);
+             } else {
+                 nPointsInput.value = points.length; // Reset to current valid value if input is bad
+                 console.warn("Invalid number of points entered.");
+             }
+        });
+
+        runPauseButton.addEventListener('click', () => {
+             if (!isRunning) { startSimulation(); }
+             else if (isPaused) { resumeSimulation(); }
+             else { pauseSimulation(); }
+         });
+
+        stopButton.addEventListener('click', stopSimulation);
+
+        // Visualization toggles listeners
+        showPheromonesCheckbox.addEventListener('change', (e) => {
+            showPheromones = e.target.checked;
+            pheromoneLinesGroup.visible = showPheromones; // Immediately toggle group visibility
+            // If turning on during run, might need an immediate opacity update?
+            if (showPheromones && isRunning && !isPaused) {
+                 updatePheromoneLineOpacities(getMaximumPheromone());
+            }
+        });
+
+         showAntPathCheckbox.addEventListener('change', (e) => {
+             showAntPath = e.target.checked;
+             if (!showAntPath) { // If turning off, clear the current temp line
+                  clearVisualization(tempAntPathLine); tempAntPathLine = null;
+             }
+         });
+
+         showBestPathCheckbox.addEventListener('change', (e) => {
+             showBestPath = e.target.checked;
+              if (!showBestPath) { // If turning off, clear the current best path line
+                   clearVisualization(bestPathLine); bestPathLine = null;
+              } else if (!bestPathLine && bestPathSoFar) { // If turning on and we have a path, redraw it
+                  bestPathLine = drawPathLine(bestPathSoFar, BEST_PATH_COLOR, 3, 1.0);
+              }
+         });
+
+         function showLoading(message = "Loading...") {
+             loadingOverlay.textContent = message; loadingOverlay.style.display = 'flex';
+         }
+         function hideLoading() {
+              loadingOverlay.style.display = 'none';
+         }
+
+        // --- Initialization ---
+        initThreeJS(); // Setup scene, camera, renderer, controls
+
+        // Set initial display values for sliders
+        ['alpha', 'beta', 'evaporationRate', 'q'].forEach(id => updateSliderValue(id, `${id}Value`));
+
+        stopButton.disabled = true; // Can't stop if not running
+
+        // Generate initial points on load
+        showLoading("Generating initial points...");
+        setTimeout(() => {
+             generatePoints(parseInt(nPointsInput.value, 10)); // Generate points based on default UI value
+             hideLoading();
+        }, 100); // Small delay to ensure page is ready
+
+    </script>
+</body>
+</html>
